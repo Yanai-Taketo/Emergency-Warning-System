@@ -1,0 +1,5 @@
+node_modules/
+ews-out/
+out/
+*.wav
+.DS_Store

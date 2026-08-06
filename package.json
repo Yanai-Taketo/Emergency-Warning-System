@@ -1,0 +1,14 @@
+{
+  "name": "emergency-warning-system",
+  "version": "1.0.0",
+  "description": "緊急警報放送 (EWS) 信号の生成・解析ツール — 学習・検証用",
+  "type": "module",
+  "license": "MIT",
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "test": "node --test test/",
+    "gen": "node tools/ews-gen.js",
+    "decode": "node tools/ews-decode.js",
+    "serve": "python3 -m http.server 8000"
+  }
+}
