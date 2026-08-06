@@ -1,5 +1,8 @@
 # 緊急警報放送 (EWS) 信号ツール
 
+**▶ 公開サイト: https://yanai-taketo.github.io/Emergency-Warning-System/**
+(インストール不要・ブラウザだけで動きます)
+
 日本の**緊急警報放送** (Emergency Warning System) のアナログ音声信号——
 いわゆる「ピロピロ音」(640Hz/1024Hz FSK, 64bit/s)——を、
 **生成**(全53地域・全信号種別・全パラメーター可変)し、
