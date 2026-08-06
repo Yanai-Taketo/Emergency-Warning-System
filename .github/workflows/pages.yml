@@ -4,7 +4,10 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches: [main]
+    # このリポジトリの既定ブランチ (claude/...) と main の両方で起動する。
+    # Pagesのgithub-pages環境は既定ブランチからのデプロイを許可するため、
+    # 既定ブランチをmainへ切り替えた後もそのまま動く。
+    branches: [main, claude/ews-tool-creation-6r6x6x]
   workflow_dispatch:
 
 permissions:
