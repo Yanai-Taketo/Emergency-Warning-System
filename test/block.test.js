@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildBlockBits, blockFields, monthDayForBlock, yearHourForBlock,
-  buildAreaKubun, buildMonthDayKubun, buildYearHourKubun,
+  buildAreaKubun, buildMonthDayKubun, buildYearHourKubun, validateDatetime,
 } from '../src/ews/block.js';
 import { FIXED_CODE_1, FIXED_CODE_2 } from '../src/ews/constants.js';
 import { findArea } from '../src/ews/area-codes.js';
@@ -67,6 +67,14 @@ test('注1ウ: 偶数ブロック・23時50分〜24時0分未満は翌日 (※=1
   assert.deepEqual(md, { month: 1, day: 1, hoshi: 1 }, '年をまたぐ翌日');
 });
 
+test('minute省略時は0分として扱う (注1イ・注2イが適用される)', () => {
+  // {hour:0} は 0時0分 → 偶数ブロックで前日・前の時になる
+  assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 0 }, 2),
+    monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 0, minute: 0 }, 2));
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 0 }, 2),
+    { hour: 23, year: 2026, hoshi: 1 });
+});
+
 test('注1ア: 偶数ブロック・0時10分〜23時50分未満は送出日 (※=0)', () => {
   assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 0, minute: 10 }, 2),
     { month: 8, day: 6, hoshi: 0 });
@@ -94,6 +102,45 @@ test('注2ア: 偶数ブロック・毎時10分〜50分未満は送出時 (※=0
     { hour: 14, year: 2026, hoshi: 0 });
   assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 49 }, 2),
     { hour: 14, year: 2026, hoshi: 0 });
+});
+
+test('注1イ境界: 0時0分ちょうど (偶数ブロック) は前日・※=1', () => {
+  assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 0, minute: 0 }, 2),
+    { month: 8, day: 5, hoshi: 1 });
+  assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 0, minute: 0 }, 1),
+    { month: 8, day: 6, hoshi: 0 }, '奇数ブロックは常に送出日');
+});
+
+test('注1ウ境界: 23時50分ちょうど (偶数ブロック) は翌日・※=1', () => {
+  assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 23, minute: 50 }, 2),
+    { month: 8, day: 7, hoshi: 1 });
+  assert.deepEqual(monthDayForBlock({ year: 2026, month: 8, day: 6, hour: 23, minute: 49 }, 2),
+    { month: 8, day: 6, hoshi: 0 }, '1分手前は送出日');
+});
+
+test('注2イ境界: 毎時0分ちょうど (偶数ブロック) は前の時・※=1', () => {
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 0 }, 2),
+    { hour: 13, year: 2026, hoshi: 1 });
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 9 }, 2),
+    { hour: 13, year: 2026, hoshi: 1 }, '9分も前の時');
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 0 }, 1),
+    { hour: 14, year: 2026, hoshi: 0 }, '奇数ブロックは常に送出時');
+});
+
+test('注2ウ境界: 毎時50分ちょうど (偶数ブロック) は次の時・※=1', () => {
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 50 }, 2),
+    { hour: 15, year: 2026, hoshi: 1 });
+  assert.deepEqual(yearHourForBlock({ year: 2026, month: 8, day: 6, hour: 14, minute: 49 }, 2),
+    { hour: 14, year: 2026, hoshi: 0 }, '1分手前は送出時');
+});
+
+test('validateDatetime: 実在しない日付・範囲外の値を拒否する', () => {
+  assert.throws(() => validateDatetime({ year: 2026, month: 2, day: 29, hour: 10, minute: 0 }), /実在しない日付/, '2026年は平年');
+  assert.doesNotThrow(() => validateDatetime({ year: 2028, month: 2, day: 29, hour: 10, minute: 0 }), '2028年は閏年');
+  assert.throws(() => validateDatetime({ year: 2026, month: 13, day: 1, hour: 0, minute: 0 }), /month/);
+  assert.throws(() => validateDatetime({ year: 2026, month: 1, day: 1, hour: 24, minute: 0 }), /hour/);
+  assert.throws(() => validateDatetime({ year: 2026, month: 1, day: 1, hour: 0, minute: 99 }), /minute/);
+  assert.throws(() => validateDatetime({ year: 2026, month: 4, day: 31, hour: 0, minute: 0 }), /実在しない日付/);
 });
 
 test('blockFields: フィールドの合計が7個・100ビット', () => {

@@ -5,6 +5,7 @@ import { MARK_HZ, SPACE_HZ, BIT_RATE, BIT_SECONDS } from '../src/ews/constants.j
 import { buildSignal } from '../src/ews/signal.js';
 import { renderSignalPcm } from '../src/ews/modulate.js';
 import { toneGrid, sliceBits, goertzelPower } from '../src/ews/demodulate.js';
+import { analyzeSignal } from '../src/ews/decode.js';
 import { writeWav16, readWav } from '../src/ews/wav.js';
 
 const dt = { year: 2026, month: 8, day: 6, hour: 13, minute: 30 };
@@ -51,6 +52,15 @@ test('8kHzでも復調できる (両トーンがナイキスト以下)', () => {
   assert.equal(bits.slice(0, 100), signal.blocks[0].bits);
 });
 
+test('不正なサンプリング周波数・gainは拒否される', () => {
+  const signal = buildSignal({ kind: 'start', blocks: 1, datetime: dt });
+  assert.throws(() => renderSignalPcm(signal, 0), /サンプリング周波数/);
+  assert.throws(() => renderSignalPcm(signal, NaN), /サンプリング周波数/);
+  assert.throws(() => renderSignalPcm(signal, 2000), /サンプリング周波数/, '1024Hzのナイキスト以下');
+  assert.throws(() => renderSignalPcm(signal, 48000, { gain: 1.5 }), /gain/);
+  assert.throws(() => renderSignalPcm(signal, 48000, { gain: -0.1 }), /gain/);
+});
+
 test('Goertzel: 純音のパワーが対象周波数で最大になる', () => {
   const sr = 48000;
   const n = 750;
@@ -59,6 +69,52 @@ test('Goertzel: 純音のパワーが対象周波数で最大になる', () => {
   const pMark = goertzelPower(tone, 0, n, MARK_HZ, sr);
   const pSpace = goertzelPower(tone, 0, n, SPACE_HZ, sr);
   assert.ok(pMark > pSpace * 100);
+});
+
+test('無信号期間は波形上も振幅ゼロ (先頭・終了信号の92ビット区間)', () => {
+  const signal = buildSignal({ kind: 'end', blocks: 2, datetime: dt, leadSilenceSeconds: 1 });
+  const { pcm } = renderSignalPcm(signal, 48000);
+  const bit = 750; // 48000/64
+  const silent = (from, to) => {
+    for (let i = from; i < to; i++) if (pcm[i] !== 0) return false;
+    return true;
+  };
+  assert.ok(silent(0, 48000), '先頭1秒の無信号期間');
+  for (let k = 0; k < 2; k++) {
+    const gapStart = 48000 + (k * 192 + 100) * bit;
+    const gapEnd = 48000 + (k + 1) * 192 * bit;
+    assert.ok(silent(gapStart, gapEnd), `ブロック${k + 1}の92ビット無信号期間`);
+    assert.ok(!silent(48000 + k * 192 * bit, gapStart), `ブロック${k + 1}の符号区間は無音でない`);
+  }
+  // ブロック間隔はちょうど192ビット (3.0秒)
+  assert.equal(pcm.length, 48000 + 2 * 192 * bit);
+});
+
+test('中波・短波の規定最少構成 (開始10/終了4ブロック) のフルパイプライン往復', () => {
+  const start = buildSignal({ kind: 'start', type: 1, area: '北海道', datetime: dt, medium: 'amsw' });
+  const rs = analyzeSignal(renderSignalPcm(start, 48000).pcm, 48000);
+  assert.equal(rs.blocks.length, 10);
+  assert.equal(rs.consensus.area.name, '北海道');
+  const end = buildSignal({ kind: 'end', area: '北海道', datetime: dt, medium: 'amsw' });
+  const re = analyzeSignal(renderSignalPcm(end, 48000).pcm, 48000);
+  assert.equal(re.blocks.length, 4);
+  assert.equal(re.consensus.classification, '終了信号');
+});
+
+test('位相同点時は軟判定マージンで最良位相が選ばれ、開始位置が正確になる', () => {
+  // 位相グリッドに揃わない端数オフセットを与えても、報告される開始位置の
+  // 誤差が1/8ビット (グリッド分解能) 程度に収まることを確認する
+  const signal = buildSignal({ kind: 'start', type: 1, area: '福岡県', datetime: dt, blocks: 2, leadSilenceSeconds: 0 });
+  const { pcm } = renderSignalPcm(signal, 48000);
+  const bit = 750;
+  for (const off of [130, 301, 389]) {
+    const shifted = new Float32Array(pcm.length + off);
+    shifted.set(pcm, off);
+    const r = analyzeSignal(shifted, 48000);
+    assert.equal(r.consensus.totalErrors, 0, `off=${off}`);
+    const delta = Math.abs(r.blocks[0].startSample - off);
+    assert.ok(delta <= bit / 8 + 1, `off=${off}: 開始位置誤差${delta}サンプル (許容${bit / 8 + 1})`);
+  }
 });
 
 test('WAV: 16bit書き出し→読み込みの往復で波形が一致する', () => {

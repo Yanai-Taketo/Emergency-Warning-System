@@ -86,8 +86,9 @@ export function findArea(input) {
   const s = String(input).trim();
   if (byName.has(s)) return byName.get(s);
   if (/^[01]{12}$/.test(s)) return byBits.get(s) ?? null;
-  if (/^0x[0-9a-f]{1,3}$/i.test(s)) {
-    return AREA_CODES.find((a) => a.code === parseInt(s, 16)) ?? null;
+  if (/^0x[0-9a-f]{1,4}$/i.test(s)) {
+    const v = parseInt(s, 16);
+    if (v <= 0xfff) return AREA_CODES.find((a) => a.code === v) ?? null;
   }
   return null;
 }

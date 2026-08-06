@@ -67,8 +67,10 @@ test('findArea: 名前・ビット列・16進・整数で引ける', () => {
   const tokyo = findArea('東京都');
   assert.equal(findArea('101010101100'), tokyo);
   assert.equal(findArea('0xaac'), tokyo);
+  assert.equal(findArea('0x0aac'), tokyo, '先頭0つき4桁16進');
   assert.equal(findArea(0xaac), tokyo);
   assert.equal(findArea('存在しない県'), null);
+  assert.equal(findArea('0x1aac'), null, '12ビットを超える値');
 });
 
 test('nearestArea: 1ビット誤りでも正しい地域に復号される', () => {

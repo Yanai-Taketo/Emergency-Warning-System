@@ -172,6 +172,19 @@ export function buildConsensus(blocks) {
   };
 }
 
+// 検出ブロックの各ビット位置における軟判定値 |d| の平均 (0..1)。
+export function softMargin(blocks, soft) {
+  let sum = 0;
+  let n = 0;
+  for (const b of blocks) {
+    for (let i = 0; i < BLOCK_BITS; i++) {
+      const d = soft[b.offsetBits + i];
+      if (d !== undefined) { sum += Math.abs(d); n++; }
+    }
+  }
+  return n > 0 ? Math.min(sum / n, 0.999999) : 0;
+}
+
 function candidateYears(digit, around = new Date().getFullYear(), span = 30) {
   const years = [];
   for (let y = around - span; y <= around + 10; y++) {
@@ -190,7 +203,11 @@ export function analyzeSignal(pcm, sampleRate) {
     const blocks = decodeBits(stream.bits);
     if (blocks.length === 0) continue;
     const errors = blocks.reduce((s, b) => s + b.totalErrors, 0);
-    const score = blocks.length * 1000 - errors;
+    // 同点 (ブロック数・誤り数が同じ位相が複数) のときは、ビット中央に窓が
+    // 最も揃った位相ほど軟判定マージン |d| の平均が大きいことを利用して選ぶ。
+    // マージンは0..1未満なので整数スコアの順序は変えない。
+    const margin = softMargin(blocks, stream.soft);
+    const score = blocks.length * 1000 - errors + margin;
     if (!best || score > best.score) best = { blocks, phase, score, stream };
   }
   if (!best) return { blocks: [], consensus: null, phase: null };

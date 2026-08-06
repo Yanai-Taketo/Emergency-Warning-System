@@ -13,7 +13,7 @@ import {
   BIT_SECONDS, SIGNAL_NAMES,
 } from './constants.js';
 import { findArea } from './area-codes.js';
-import { blockFields } from './block.js';
+import { blockFields, validateDatetime } from './block.js';
 
 // 現在時刻 (実行環境のローカル時刻) を datetime 形式で返す。
 // 日本国内の放送はJSTで運用されるため、日本で使う場合はそのままJSTになる。
@@ -41,6 +41,10 @@ export function buildSignal({
 } = {}) {
   if (kind !== 'start' && kind !== 'end') throw new RangeError(`kindはstart/endです: ${kind}`);
   if (medium !== 'tvfm' && medium !== 'amsw') throw new RangeError(`mediumはtvfm/amswです: ${medium}`);
+  if (!Number.isFinite(leadSilenceSeconds) || leadSilenceSeconds < 0) {
+    throw new RangeError(`先頭無信号期間が不正です: ${leadSilenceSeconds}`);
+  }
+  validateDatetime(datetime);
 
   let areaBits;
   if (typeof area === 'object' && area?.bits) areaBits = area.bits;

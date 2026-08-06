@@ -79,6 +79,11 @@ test('overrides: 片方だけの指定ではもう片方は注の自動規則の
   assert.equal(s.blocks[1].fields[6].value.hour, 13, '年時は注2どおり偶数ブロックで前の時');
 });
 
+test('負の先頭無信号期間は拒否される', () => {
+  assert.throws(() => buildSignal({ kind: 'start', datetime: dt, leadSilenceSeconds: -1 }), /無信号期間/);
+  assert.throws(() => buildSignal({ kind: 'start', datetime: dt, leadSilenceSeconds: NaN }), /無信号期間/);
+});
+
 test('地域は名前でもビット列でも整数でも指定できる', () => {
   const byName = buildSignal({ kind: 'start', area: '東京都', datetime: dt });
   const byBits = buildSignal({ kind: 'start', area: '101010101100', datetime: dt });

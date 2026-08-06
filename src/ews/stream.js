@@ -12,7 +12,7 @@
 
 import { MARK_HZ, SPACE_HZ, BIT_RATE } from './constants.js';
 import { goertzelPower, PHASES_PER_BIT } from './demodulate.js';
-import { decodeBits, buildConsensus } from './decode.js';
+import { decodeBits, buildConsensus, softMargin } from './decode.js';
 
 export class StreamingAnalyzer {
   // historySeconds: 解析対象として保持する長さ (古い分から捨てる)
@@ -97,11 +97,16 @@ export class StreamingAnalyzer {
       const n = Math.ceil((steps - phase) / PHASES_PER_BIT);
       if (n < 100) continue;
       let bits = '';
-      for (let i = 0; i < n; i++) bits += this.d[phase + i * PHASES_PER_BIT] >= 0 ? '1' : '0';
+      const soft = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        soft[i] = this.d[phase + i * PHASES_PER_BIT];
+        bits += soft[i] >= 0 ? '1' : '0';
+      }
       const blocks = decodeBits(bits);
       if (blocks.length === 0) continue;
       const errors = blocks.reduce((s, b) => s + b.totalErrors, 0);
-      const score = blocks.length * 1000 - errors;
+      // decode.js の analyzeSignal と同じ: 同点位相は軟判定マージンで選ぶ
+      const score = blocks.length * 1000 - errors + softMargin(blocks, soft);
       if (!best || score > best.score) best = { blocks, phase, score };
     }
     if (!best) return { blocks: [], consensus: null, phase: null };

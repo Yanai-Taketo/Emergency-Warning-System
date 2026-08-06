@@ -138,6 +138,54 @@ test('偶数ブロックの※=1 (前の時) があってもコンセンサス�
   assert.equal(r.consensus.hasAdjacentHour, true);
 });
 
+const flipAt = (s, ...idx) => {
+  let out = s;
+  for (const i of idx) out = out.slice(0, i) + (out[i] === '0' ? '1' : '0') + out.slice(i + 1);
+  return out;
+};
+
+test('多数決: 1ブロックの地域符号に3ビット誤りがあっても総合判定は正しい地域になる', () => {
+  // 地域共通(001101001101)と北海道(000101101011)は距離4。3ビットを北海道方向へ
+  // 倒すと当該ブロック単体は北海道(距離1)に誤復号されるが、残り3ブロックとの
+  // ビット単位多数決で地域共通が復元される (告示が複数ブロックを連接させる意図)。
+  const signal = buildSignal({ kind: 'start', area: '地域共通', datetime: dt, blocks: 4 });
+  let bits = signal.blocks.map((b) => b.bits).join('');
+  // 2ブロック目の地域符号 (ブロック内オフセット22..33) の相違位置 idx2,6,9
+  bits = flipAt(bits, 100 + 22 + 2, 100 + 22 + 6, 100 + 22 + 9);
+  const blocks = decodeBits(bits);
+  assert.equal(blocks.length, 4);
+  assert.equal(blocks[1].area.name, '北海道', '単体ブロックは誤った地域に見える');
+  assert.equal(blocks[1].area.dist, 1);
+  const c = buildConsensus(blocks);
+  assert.equal(c.area.name, '地域共通', 'ビット単位多数決で復元される');
+  assert.equal(c.area.dist, 0);
+});
+
+test('多数決: 1ブロックの時符号が別の時に化けても値の多数決で送出時が選ばれる', () => {
+  // 13時(10101)→1時(10011)は2ビット差 (時符号はブロック内オフセット87..91)
+  const signal = buildSignal({ kind: 'start', area: '地域共通', datetime: dt, blocks: 4 });
+  let bits = signal.blocks.map((b) => b.bits).join('');
+  bits = flipAt(bits, 200 + 87 + 2, 200 + 87 + 3);
+  const blocks = decodeBits(bits);
+  assert.equal(blocks[2].hour.value, 1, '当該ブロック単体は1時に見える');
+  const c = buildConsensus(blocks);
+  assert.equal(c.hour, 13, '値の多数決で送出時が選ばれる');
+});
+
+test('多数決: 開始信号と終了信号が混在する録音では多数派の種別に分類される', () => {
+  const start = buildSignal({ kind: 'start', type: 1, area: '東京都', datetime: dt, blocks: 4 });
+  const end = buildSignal({ kind: 'end', area: '東京都', datetime: dt, blocks: 2, leadSilenceSeconds: 0.5 });
+  const a = renderSignalPcm(start, 48000).pcm;
+  const b = renderSignalPcm(end, 48000).pcm;
+  const pcm = new Float32Array(a.length + b.length);
+  pcm.set(a, 0);
+  pcm.set(b, a.length);
+  const r = analyzeSignal(pcm, 48000);
+  assert.equal(r.blocks.length, 6, '開始4+終了2の全ブロックが検出される');
+  assert.equal(r.consensus.classification, '第一種開始信号', '多数派 (4対2) の種別');
+  assert.equal(r.consensus.blockCount, 4, 'コンセンサスは多数派種別のブロックから作られる');
+});
+
 test('信号が含まれない雑音のみの入力では何も検出されない', () => {
   const noise = addNoise(new Float32Array(48000 * 3), 0.3, 7);
   const r = analyzeSignal(noise, 48000);

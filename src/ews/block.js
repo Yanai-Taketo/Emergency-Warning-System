@@ -22,6 +22,25 @@ import { dayCode, monthCode, hourCode, yearCode } from './datetime-codes.js';
 function toUtcMs({ year, month, day, hour, minute = 0 }) {
   return Date.UTC(year, month - 1, day, hour, minute);
 }
+
+// 日時の範囲と実在性 (平年の2/29等を拒否) を検証する。
+export function validateDatetime(dt) {
+  const { year, month, day, hour, minute = 0 } = dt ?? {};
+  const fields = [
+    ['year', year, 1, 9999], ['month', month, 1, 12], ['day', day, 1, 31],
+    ['hour', hour, 0, 23], ['minute', minute, 0, 59],
+  ];
+  for (const [name, v, min, max] of fields) {
+    if (!Number.isInteger(v) || v < min || v > max) {
+      throw new RangeError(`日時が不正です: ${name}=${v}`);
+    }
+  }
+  const d = new Date(Date.UTC(year, month - 1, day));
+  if (d.getUTCMonth() + 1 !== month || d.getUTCDate() !== day) {
+    throw new RangeError(`実在しない日付です: ${year}-${month}-${day}`);
+  }
+  return dt;
+}
 function fromUtcMs(ms) {
   const d = new Date(ms);
   return {
@@ -38,7 +57,7 @@ function fromUtcMs(ms) {
 //     ウ 23時50分〜24時0分未満: 翌日
 //   (3) 送出の日に対応する場合 ※=0、その他 ※=1
 export function monthDayForBlock(datetime, blockIndex) {
-  const { hour, minute } = datetime;
+  const { hour, minute = 0 } = datetime; // minute省略時は0分 (toUtcMsと同じ既定)
   let shiftDays = 0;
   if (blockIndex % 2 === 0) {
     if (hour === 0 && minute < 10) shiftDays = -1;
@@ -57,7 +76,7 @@ export function monthDayForBlock(datetime, blockIndex) {
 //   (3) 送出の時に対応する場合 ※=0、その他 ※=1
 // (年をまたぐ場合は年符号も前後の時刻のものになるため、日時演算で求める)
 export function yearHourForBlock(datetime, blockIndex) {
-  const { minute } = datetime;
+  const { minute = 0 } = datetime; // minute省略時は0分 (toUtcMsと同じ既定)
   let shiftHours = 0;
   if (blockIndex % 2 === 0) {
     if (minute < 10) shiftHours = -1;

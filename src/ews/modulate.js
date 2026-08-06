@@ -15,6 +15,12 @@ import { MARK_HZ, SPACE_HZ, BIT_RATE } from './constants.js';
 // signal: buildSignal() の返り値
 // 返り値: { pcm: Float32Array, sampleRate }
 export function renderSignalPcm(signal, sampleRate = 48000, { gain = 0.7 } = {}) {
+  if (!Number.isFinite(sampleRate) || sampleRate <= 2 * MARK_HZ) {
+    throw new RangeError(`サンプリング周波数が不正です (${2 * MARK_HZ}Hz超が必要): ${sampleRate}`);
+  }
+  if (!Number.isFinite(gain) || gain < 0 || gain > 1) {
+    throw new RangeError(`gainは0〜1です: ${gain}`);
+  }
   const leadSamples = Math.round(signal.leadSilenceSeconds * sampleRate);
 
   // 送出ビット列を「音のあるビット」と「無信号ビット」の並びに展開する

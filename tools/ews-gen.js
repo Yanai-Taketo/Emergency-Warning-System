@@ -46,9 +46,28 @@ function parseArgs(argv) {
 
 function parseDate(s) {
   if (!s || s === 'now') return nowDatetime();
-  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})/.exec(s);
-  if (!m) throw new Error(`日時の形式が不正です (YYYY-MM-DDTHH:MM): ${s}`);
+  // 末尾までの完全一致を要求する (タイムゾーン接尾辞等は不可 — 壁時計時刻のみ)。
+  // 値の範囲・日付の実在性は buildSignal 側の validateDatetime が検査する。
+  const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})$/.exec(s);
+  if (!m) throw new Error(`日時の形式が不正です (YYYY-MM-DDTHH:MM, タイムゾーン指定は不可): ${s}`);
   return { year: +m[1], month: +m[2], day: +m[3], hour: +m[4], minute: +m[5] };
+}
+
+// 値つきオプションの取り出し。値が省略されていたら (--out --json のような並びも) エラー。
+function strOpt(args, key) {
+  const v = args[key];
+  if (v === undefined) return undefined;
+  if (v === true) throw new Error(`--${key} には値が必要です`);
+  return v;
+}
+function numOpt(args, key, { int = false, min = -Infinity, max = Infinity } = {}) {
+  const s = strOpt(args, key);
+  if (s === undefined) return undefined;
+  const v = Number(s);
+  if (!Number.isFinite(v) || (int && !Number.isInteger(v)) || v < min || v > max) {
+    throw new Error(`--${key} の値が不正です: ${s}`);
+  }
+  return v;
 }
 
 function buildOverrides(args) {
@@ -57,13 +76,21 @@ function buildOverrides(args) {
     if (args.day === undefined || args.month === undefined) {
       throw new Error('月日区分符号の固定には --day と --month の両方が必要です');
     }
-    overrides.monthDay = { day: +args.day, month: +args.month, hoshi: +(args['hoshi-day'] ?? 0) };
+    overrides.monthDay = {
+      day: numOpt(args, 'day', { int: true, min: 1, max: 31 }),
+      month: numOpt(args, 'month', { int: true, min: 1, max: 12 }),
+      hoshi: numOpt(args, 'hoshi-day', { int: true, min: 0, max: 1 }) ?? 0,
+    };
   }
   if (args.hour !== undefined || args['year-digit'] !== undefined || args['hoshi-hour'] !== undefined) {
     if (args.hour === undefined || args['year-digit'] === undefined) {
       throw new Error('年時区分符号の固定には --hour と --year-digit の両方が必要です');
     }
-    overrides.yearHour = { hour: +args.hour, yearDigit: +args['year-digit'], hoshi: +(args['hoshi-hour'] ?? 0) };
+    overrides.yearHour = {
+      hour: numOpt(args, 'hour', { int: true, min: 0, max: 23 }),
+      yearDigit: numOpt(args, 'year-digit', { int: true, min: 0, max: 9 }),
+      hoshi: numOpt(args, 'hoshi-hour', { int: true, min: 0, max: 1 }) ?? 0,
+    };
   }
   return Object.keys(overrides).length ? overrides : undefined;
 }
@@ -95,16 +122,16 @@ function main() {
   }
 
   const common = {
-    kind: args.kind,
-    type: args.type ? +args.type : 1,
-    datetime: parseDate(args.date),
-    medium: args.medium ?? 'tvfm',
-    blocks: args.blocks ? +args.blocks : undefined,
-    leadSilenceSeconds: args.lead !== undefined ? +args.lead : undefined,
+    kind: strOpt(args, 'kind'),
+    type: numOpt(args, 'type', { int: true, min: 1, max: 2 }) ?? 1,
+    datetime: parseDate(strOpt(args, 'date')),
+    medium: strOpt(args, 'medium') ?? 'tvfm',
+    blocks: numOpt(args, 'blocks', { int: true, min: 1, max: 1000 }),
+    leadSilenceSeconds: numOpt(args, 'lead', { min: 0, max: 3600 }),
     overrides: buildOverrides(args),
   };
-  const sampleRate = args.rate ? +args.rate : 48000;
-  const gain = args.gain !== undefined ? +args.gain : 0.7;
+  const sampleRate = numOpt(args, 'rate', { int: true, min: 2100, max: 384000 }) ?? 48000;
+  const gain = numOpt(args, 'gain', { min: 0, max: 1 }) ?? 0.7;
 
   if (!common.kind) {
     console.error('使い方: node tools/ews-gen.js --kind start|end [--type 1|2] [--area 地域] [--out FILE.wav]');
@@ -128,7 +155,7 @@ function main() {
     return;
   }
 
-  const signal = buildSignal({ ...common, area: args.area ?? '地域共通' });
+  const signal = buildSignal({ ...common, area: strOpt(args, 'area') ?? '地域共通' });
   const { pcm } = renderSignalPcm(signal, sampleRate, { gain });
 
   if (args.json) {
@@ -149,10 +176,16 @@ function main() {
   if (signal.belowMinimum) {
     console.error(`警告: ブロック数${signal.blocks.length}は告示の最少数${signal.minBlocks}を下回っています (検証用)`);
   }
-  if (args.out) {
-    writeFileSync(args.out, writeWav16(pcm, sampleRate));
-    console.log(`出力: ${args.out} (${(pcm.length / sampleRate).toFixed(3)}秒)`);
+  const out = strOpt(args, 'out');
+  if (out) {
+    writeFileSync(out, writeWav16(pcm, sampleRate));
+    console.log(`出力: ${out} (${(pcm.length / sampleRate).toFixed(3)}秒)`);
   }
 }
 
-main();
+try {
+  main();
+} catch (e) {
+  console.error(`エラー: ${e.message}`);
+  process.exitCode = 2;
+}

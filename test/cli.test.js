@@ -57,6 +57,23 @@ test('ews-gen オーバーライドで任意の月日・年時を固定できる
   }
 });
 
+test('ews-gen は不正な引数を明確なエラーで拒否する', () => {
+  const cases = [
+    ['--kind', 'start', '--rate', '0'],
+    ['--kind', 'start', '--rate', '44.1k'],
+    ['--kind', 'start', '--lead', '-5'],
+    ['--kind', 'start', '--gain', '2'],
+    ['--kind', 'start', '--out', '--json'],   // --out の値が欠落
+    ['--kind', 'start', '--blocks', '0'],
+  ];
+  for (const a of cases) {
+    let code = 0, stderr = '';
+    try { run('ews-gen.js', ...a); } catch (e) { code = e.status; stderr = String(e.stderr); }
+    assert.equal(code, 2, `${a.join(' ')} が拒否されない`);
+    assert.match(stderr, /エラー|不正|必要/, a.join(' '));
+  }
+});
+
 test('ews-decode は信号なしWAVで終了コード1', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ews-'));
   try {
