@@ -1,0 +1,139 @@
+/* ==========================================================================
+   EWS信号ツール デザイントークン
+   ライト = 技術文書の紙面 / ダーク = 監視卓の低輝度画面
+   ========================================================================== */
+
+:root {
+  color-scheme: light dark;
+
+  /* ---- 背景（3階層: ページ → パネル → 井桁/入力面） ---- */
+  --bg-base:   #e8e6e1;   /* ページ地。わずかに暖色の紙灰 */
+  --bg-panel:  #f5f4f0;   /* パネル・セクション面 */
+  --bg-inset:  #fdfdfa;   /* 入力欄・ビット表示・表の中身 */
+
+  /* ---- テキスト（2階層） ---- */
+  --text-1: #1c1c1a;      /* 本文・値 */
+  --text-2: #5a564e;      /* ラベル・補足 */
+
+  /* ---- 罫線 ---- */
+  --border:        #d3d0c8;  /* 通常罫線 */
+  --border-strong: #a8a49a;  /* パネル外周・表ヘッダ下 */
+
+  /* ---- ベゼル（ヘッダ/フッタ: テーマ共通で常に暗色） ---- */
+  --bezel-bg:   #20242a;
+  --bezel-text: #d8d6d0;
+  --bezel-dim:  #8a8d94;
+
+  /* ---- アクセント（操作系のみに使用） ---- */
+  --accent:          #175a9c;  /* 業務ブルー */
+  --accent-hover:    #124a82;
+  --accent-contrast: #ffffff;
+  --focus:           #0f62c4;
+
+  /* ---- 状態色 ---- */
+  --warn:     #7a5b00;  --warn-bg:  #fbf1cd;  --warn-border:  #d9b23a;
+  --alert:    #b3261e;  --alert-bg: #f9e4e2;  --alert-border: #d98a84;
+  --ok:       #2f6f33;  --ok-bg:    #e3efe3;  --ok-border:    #8cb98e;
+
+  /* ---- 信号種別 識別色 ---- */
+  --sig-type1:    #b3261e;  --sig-type1-bg: #f9e4e2;  /* 第一種開始 */
+  --sig-type2:    #8a5a00;  --sig-type2-bg: #f7ecd0;  /* 第二種開始（津波） */
+  --sig-end:      #1f6f5c;  --sig-end-bg:   #ddeee9;  /* 終了 */
+
+  /* ---- ビット構成表 フィールド色（-bg: 面 / -key: 凡例・境界） ---- */
+  --field-preamble-bg: #d9ecf5;  --field-preamble-key: #2a7ea6;  /* 前置符号 */
+  --field-fixed-bg:    #ebeae5;  --field-fixed-key:    #8d897f;  /* 固定符号 */
+  --field-area-bg:     #ddeedd;  --field-area-key:     #3a7d3e;  /* 地域符号 */
+  --field-md-bg:       #f7ecd0;  --field-md-key:       #a07515;  /* 月日区分符号 */
+  --field-yh-bg:       #dde6f5;  --field-yh-key:       #3a63a8;  /* 年時区分符号 */
+  --field-star-bg:     #f5dcdc;  --field-star-key:     #b3261e;  /* ※ビット */
+
+  /* ---- ランプ・メーター ---- */
+  --lamp-off:    #c9c6be;
+  --lamp-green:  #2e8b3a;  --lamp-amber: #d99a00;  --lamp-red: #d0342a;
+  --meter-track: #dcdad3;
+  --meter-green: #2e8b3a;  --meter-amber: #d99a00; --meter-red: #d0342a;
+
+  /* ---- タイポグラフィ ---- */
+  --font-sans: "Hiragino Sans", "Hiragino Kaku Gothic ProN",
+               "BIZ UDPGothic", "Yu Gothic UI", "Noto Sans JP",
+               Meiryo, system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Consolas,
+               "BIZ UDGothic", "MS Gothic", monospace;
+
+  --fs-xs:   0.6875rem;
+  --fs-s:    0.75rem;
+  --fs-m:    0.8125rem;
+  --fs-l:    0.875rem;
+  --fs-xl:   1rem;
+  --fs-xxl:  1.125rem;
+  --fs-title:1.25rem;
+
+  --lh-tight: 1.35;
+  --lh-ui:    1.5;
+  --lh-doc:   1.8;
+  --lh-bits:  2.0;
+
+  /* ---- 余白スケール（密度優先・8px基調） ---- */
+  --sp-05: 2px;  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;
+  --sp-4: 16px;  --sp-5: 24px; --sp-6: 32px;
+
+  /* ---- 罫線幅・角丸・影 ---- */
+  --bw: 1px;
+  --radius: 2px;
+  --radius-panel: 0;
+  --shadow-overlay: 0 2px 8px rgba(0, 0, 0, 0.25);
+
+  /* ---- 寸法 ---- */
+  --control-h: 32px;
+  --control-h-touch: 44px;
+  --tab-h: 40px;
+}
+
+/* ==========================================================================
+   ダークテーマ（監視卓: 低輝度・低彩度の発光色）
+   ========================================================================== */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg-base:   #14161a;
+    --bg-panel:  #1c1f24;
+    --bg-inset:  #101216;
+
+    --text-1: #e6e4de;
+    --text-2: #a09d94;
+
+    --border:        #33373d;
+    --border-strong: #4a4f57;
+
+    --bezel-bg:   #0d0f12;
+    --bezel-text: #c8c6c0;
+    --bezel-dim:  #767a82;
+
+    --accent:          #7db3e8;
+    --accent-hover:    #9cc5ef;
+    --accent-contrast: #10233a;
+    --focus:           #8ab9ea;
+
+    --warn:  #e5b455;  --warn-bg:  #2a2410;  --warn-border:  #8a7327;
+    --alert: #ee7b6d;  --alert-bg: #331714;  --alert-border: #8a4038;
+    --ok:    #7cc281;  --ok-bg:    #14261a;  --ok-border:    #3e6a44;
+
+    --sig-type1: #ee7b6d;  --sig-type1-bg: #331714;
+    --sig-type2: #e5a93c;  --sig-type2-bg: #2a2410;
+    --sig-end:   #58b6a0;  --sig-end-bg:   #102621;
+
+    --field-preamble-bg: #14333f;  --field-preamble-key: #5fa8c9;
+    --field-fixed-bg:    #24262b;  --field-fixed-key:    #85878d;
+    --field-area-bg:     #1a3320;  --field-area-key:     #6db373;
+    --field-md-bg:       #38300f;  --field-md-key:       #cfa23c;
+    --field-yh-bg:       #1c2a42;  --field-yh-key:       #7d9fd6;
+    --field-star-bg:     #421f1b;  --field-star-key:     #ee7b6d;
+
+    --lamp-off:    #33373d;
+    --lamp-green:  #46b155;  --lamp-amber: #e0a922;  --lamp-red: #e8564a;
+    --meter-track: #24262b;
+    --meter-green: #46b155;  --meter-amber: #e0a922; --meter-red: #e8564a;
+
+    --shadow-overlay: 0 2px 10px rgba(0, 0, 0, 0.6);
+  }
+}

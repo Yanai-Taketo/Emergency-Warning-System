@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>緊急警報放送信号ツール — EWS SIGNAL TOOL</title>
+<meta name="description" content="緊急警報放送 (EWS) のFSK信号を生成・解析する学習・検証用ツール。一次資料 (無線設備規則・郵政省告示第405号) に基づく実装。">
+<link rel="stylesheet" href="web/tokens.css">
+<link rel="stylesheet" href="web/style.css">
+</head>
+<body>
+
+<header class="bezel">
+  <h1>緊急警報放送信号ツール</h1>
+  <span class="subtitle">EWS SIGNAL TOOL — 学習・検証用</span>
+  <div class="header-status"><span id="header-audio">AUDIO: --</span></div>
+</header>
+
+<div class="notice">
+  <span><strong>注意</strong>
+  生成した音声の再生により、近隣のEWS対応受信機（防災ラジオ等）が実際に起動するおそれがあります。スピーカー再生時は音量に注意してください。また、この信号を電波として送信するには電波法に基づく免許が必要です。本ツールは音声信号の学習・手元での検証のみを目的としています。</span>
+</div>
+
+<nav class="tabs" role="tablist" aria-label="機能">
+  <button class="tab" id="tab-gen" role="tab" aria-selected="true" aria-controls="panel-gen">信号生成</button>
+  <button class="tab" id="tab-ana" role="tab" aria-selected="false" aria-controls="panel-ana">信号解析</button>
+  <button class="tab" id="tab-ref" role="tab" aria-selected="false" aria-controls="panel-ref">資料</button>
+</nav>
+
+<main>
+
+<!-- ======================== 信号生成 ======================== -->
+<section id="panel-gen" role="tabpanel" aria-labelledby="tab-gen">
+  <div class="gen-grid">
+    <form class="panel" id="gen-form">
+      <h2 class="panel-title">パラメータ</h2>
+
+      <fieldset>
+        <legend>信号</legend>
+        <div class="field">
+          <label>信号種別</label>
+          <div class="radio-row" id="gen-kind">
+            <label><input type="radio" name="kind" value="start1" checked> 第一種開始信号</label>
+            <label><input type="radio" name="kind" value="start2"> 第二種開始信号（津波警報）</label>
+            <label><input type="radio" name="kind" value="end"> 終了信号</label>
+          </div>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>地域</legend>
+        <div class="field">
+          <label for="gen-area">地域</label>
+          <select class="select" id="gen-area"></select>
+        </div>
+        <div class="field">
+          <label><input type="checkbox" id="gen-area-custom-on"> 地域符号（12ビット直接入力）</label>
+          <input class="input input-mono" id="gen-area-custom" placeholder="001101001101"
+                 pattern="[01]{12}" inputmode="numeric" maxlength="12" disabled aria-invalid="false">
+          <span class="error" id="gen-area-custom-err" hidden>0と1で12桁を入力してください。</span>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>日時</legend>
+        <div class="field">
+          <label for="gen-datetime">日時（分単位）</label>
+          <div class="row">
+            <input class="input" type="datetime-local" id="gen-datetime" step="60">
+            <button type="button" class="btn" id="gen-now">現在時刻</button>
+          </div>
+          <span class="hint">偶数ブロックの月日・年時は告示 注1・注2 の規則（0-10分/50-60分などで前後の日・時に切替）を自動適用</span>
+        </div>
+        <details class="advanced" id="gen-adv">
+          <summary>詳細設定（手動オーバーライド: 月日・年時）</summary>
+          <div class="adv-body">
+            <span class="hint">告示 注1・注2による月日・年時の自動割当を外し、任意の値を設定します。検証用途以外では変更不要です。</span>
+            <div class="field">
+              <label><input type="checkbox" id="ovr-md-on"> 月日区分符号を固定</label>
+              <div class="adv-grid">
+                <div class="field"><label for="ovr-month">月</label>
+                  <input class="input" type="number" id="ovr-month" min="1" max="12" value="1" disabled></div>
+                <div class="field"><label for="ovr-day">日</label>
+                  <input class="input" type="number" id="ovr-day" min="1" max="31" value="1" disabled></div>
+                <div class="field"><label for="ovr-md-hoshi">※ビット</label>
+                  <select class="select" id="ovr-md-hoshi" disabled><option value="0">0</option><option value="1">1</option></select></div>
+              </div>
+            </div>
+            <div class="field">
+              <label><input type="checkbox" id="ovr-yh-on"> 年時区分符号を固定</label>
+              <div class="adv-grid">
+                <div class="field"><label for="ovr-hour">時</label>
+                  <input class="input" type="number" id="ovr-hour" min="0" max="23" value="0" disabled></div>
+                <div class="field"><label for="ovr-year">年（西暦下1桁）</label>
+                  <input class="input" type="number" id="ovr-year" min="0" max="9" value="0" disabled></div>
+                <div class="field"><label for="ovr-yh-hoshi">※ビット</label>
+                  <select class="select" id="ovr-yh-hoshi" disabled><option value="0">0</option><option value="1">1</option></select></div>
+              </div>
+            </div>
+          </div>
+        </details>
+      </fieldset>
+
+      <fieldset>
+        <legend>出力設定</legend>
+        <div class="field">
+          <label>媒体（規定の最少ブロック数）</label>
+          <div class="radio-row">
+            <label><input type="radio" name="medium" value="tvfm" checked> テレビ・FM等（開始4 / 終了2）</label>
+            <label><input type="radio" name="medium" value="amsw"> 中波・短波（開始10 / 終了4）</label>
+          </div>
+        </div>
+        <div class="field">
+          <label for="gen-blocks">ブロック数</label>
+          <input class="input" type="number" id="gen-blocks" min="1" max="30" value="4">
+          <span class="error" id="gen-blocks-warn" hidden>告示の最少ブロック数を下回っています（検証用）。</span>
+        </div>
+        <div class="field">
+          <label for="gen-rate">サンプリング周波数</label>
+          <select class="select" id="gen-rate">
+            <option value="48000" selected>48000 Hz</option>
+            <option value="44100">44100 Hz</option>
+            <option value="32000">32000 Hz</option>
+            <option value="16000">16000 Hz</option>
+            <option value="8000">8000 Hz</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="gen-gain">音量</label>
+          <div class="range-row">
+            <input type="range" id="gen-gain" min="0.01" max="1" step="0.01" value="0.7">
+            <span class="db" id="gen-gain-db">-3.1 dBFS</span>
+          </div>
+        </div>
+        <div class="field">
+          <label for="gen-lead">先頭無信号期間（秒）</label>
+          <input class="input" type="number" id="gen-lead" min="0" max="10" step="0.1" value="1">
+          <span class="hint">告示の規定は「1秒間以上」</span>
+        </div>
+      </fieldset>
+    </form>
+
+    <div>
+      <div class="panel">
+        <h2 class="panel-title">出力</h2>
+        <div class="panel-body row">
+          <button type="button" class="btn btn-primary" id="gen-play">▶ 再生</button>
+          <button type="button" class="btn" id="gen-stop" disabled>■ 停止</button>
+          <button type="button" class="btn" id="gen-save">WAV保存</button>
+          <span class="status" data-state="idle" id="gen-status"><span class="led"></span><span id="gen-status-text">待機</span></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2 class="panel-title">生成信号</h2>
+        <div class="gen-summary" id="gen-summary">--</div>
+        <div class="bit-legend" aria-label="ビット構成の凡例">
+          <span class="chip"><i style="background:var(--field-preamble-key)"></i>前置符号</span>
+          <span class="chip"><i style="background:var(--field-fixed-key)"></i>固定符号</span>
+          <span class="chip"><i style="background:var(--field-area-key)"></i>地域区分符号</span>
+          <span class="chip"><i style="background:var(--field-md-key)"></i>月日区分符号</span>
+          <span class="chip"><i style="background:var(--field-yh-key)"></i>年時区分符号</span>
+          <span class="chip"><i style="background:var(--field-star-key)"></i>※ビット</span>
+        </div>
+        <div id="gen-blocks-view"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================== 信号解析 ======================== -->
+<section id="panel-ana" role="tabpanel" aria-labelledby="tab-ana" hidden>
+  <div class="panel">
+    <h2 class="panel-title">入力</h2>
+    <div class="panel-body" style="display:grid; gap:var(--sp-3)">
+      <div class="row">
+        <button type="button" class="btn btn-primary" id="ana-mic">マイク解析を開始</button>
+        <button type="button" class="btn" id="ana-mic-stop" disabled>解析を停止</button>
+        <span class="status" data-state="idle" id="ana-status"><span class="led"></span><span id="ana-status-text">待機</span></span>
+      </div>
+      <div class="drop-zone" id="ana-drop" tabindex="0" role="button"
+           aria-label="音声ファイルをドロップ、またはクリックで選択">
+        音声ファイルをここにドロップ（クリックで選択）<br>
+        <span class="hint">WAV / ブラウザが復号可能な音声形式</span>
+      </div>
+      <input type="file" id="ana-file" accept="audio/*,.wav" hidden>
+      <div class="meter-row">
+        <span>入力レベル</span>
+        <div class="meter" role="meter" aria-label="入力レベル" aria-valuemin="-60" aria-valuemax="0" aria-valuenow="-60" id="ana-meter">
+          <div class="fill"></div><div class="mask" id="ana-meter-mask"></div><div class="peak" id="ana-meter-peak"></div>
+        </div>
+        <span class="db" id="ana-meter-db">-- dBFS</span>
+      </div>
+      <div class="row">
+        <span>トーン検出</span>
+        <span class="tone tone-640" id="ana-tone-640"><span class="led"></span>640 Hz</span>
+        <span class="tone tone-1024" id="ana-tone-1024"><span class="led"></span>1024 Hz</span>
+        <span class="hint" id="ana-src-info"></span>
+      </div>
+      <span class="error" id="ana-error" hidden></span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 class="panel-title">解析結果</h2>
+    <div class="result" aria-live="polite" id="ana-result">
+      <dl>
+        <dt>判定</dt><dd class="empty" id="r-class">──（信号未検出）</dd>
+        <dt>地域</dt><dd class="empty" id="r-area">──</dd>
+        <dt>月日</dt><dd class="empty" id="r-md">──</dd>
+        <dt>時刻</dt><dd class="empty" id="r-hour">──</dd>
+        <dt>年</dt><dd class="empty" id="r-year">──</dd>
+        <dt>ビット誤り</dt><dd class="empty" id="r-err">──</dd>
+        <dt>受信機起動</dt><dd class="empty" id="r-recv">──</dd>
+      </dl>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2 class="panel-title">ブロック詳細</h2>
+    <div class="panel-body table-wrap">
+      <table class="data" id="ana-blocks-table" hidden>
+        <thead><tr><th>#</th><th>位置</th><th>種別</th><th>地域</th><th>月日</th><th>年時</th><th>誤り</th></tr></thead>
+        <tbody></tbody>
+      </table>
+      <div class="hint" id="ana-blocks-empty">──（信号未検出）</div>
+    </div>
+  </div>
+</section>
+
+<!-- ======================== 資料 ======================== -->
+<section id="panel-ref" role="tabpanel" aria-labelledby="tab-ref" hidden>
+  <div class="doc" id="ref-doc">
+    <h2>信号仕様（一次資料の転記）</h2>
+    <p>
+      緊急警報信号は、640 Hz（"0"）と1,024 Hz（"1"）の2トーンによる
+      連続位相FSK・毎秒64ビットの音声信号です（無線設備規則 第9条の3。
+      周波数・伝送速度の許容偏差は各±10ppm、歪率5%以下）。
+      1ビット＝15.625 msは640 Hzのちょうど10周期・1,024 Hzのちょうど16周期に
+      あたります。
+    </p>
+    <p class="source">出典: 無線設備規則（昭和25年電波監理委員会規則第18号）第9条の3</p>
+
+    <h3>信号構成</h3>
+    <p>
+      開始信号（第一種・第二種）は、1秒間以上の無信号期間ののち
+      100ビットのブロック（1.5625秒）を4回以上（中波・短波は10回以上）連接。
+      終了信号は100ビット＋92ビット無信号期間＝192ビット（3.0秒）の
+      ブロックを2回以上（中波・短波は4回以上）連接します。
+    </p>
+    <div class="table-wrap">
+      <table class="data">
+        <thead><tr><th>符号</th><th>種別</th><th>構成</th></tr></thead>
+        <tbody>
+          <tr><td rowspan="2">前置符号 (4bit)</td><td>開始</td><td class="mono">1100</td></tr>
+          <tr><td>終了</td><td class="mono">0011</td></tr>
+          <tr><td rowspan="2">固定符号 (16bit)</td><td>第一種開始・終了</td><td class="mono">0000 1110 0110 1101</td></tr>
+          <tr><td>第二種開始</td><td class="mono">1111 0001 1001 0010</td></tr>
+          <tr><td rowspan="2">地域区分符号 (16bit)</td><td>開始</td><td class="mono">10 [地域符号12bit] 00</td></tr>
+          <tr><td>終了</td><td class="mono">01 [地域符号12bit] 11</td></tr>
+          <tr><td rowspan="2">月日区分符号 (16bit)</td><td>開始</td><td class="mono">010 [日5bit] ※ [月5bit] 00</td></tr>
+          <tr><td>終了</td><td class="mono">100 [日5bit] ※ [月5bit] 11</td></tr>
+          <tr><td rowspan="2">年時区分符号 (16bit)</td><td>開始</td><td class="mono">011 [時5bit] ※ [年5bit] 00</td></tr>
+          <tr><td>終了</td><td class="mono">101 [時5bit] ※ [年5bit] 11</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="source">出典: 昭和60年郵政省告示第405号「無線設備規則第九条の三第五号の規定に基づく緊急警報信号の構成」</p>
+
+    <h3>地域符号一覧（53地域）</h3>
+    <div class="table-wrap" id="ref-areas"></div>
+    <p class="source">出典: 昭和60年郵政省告示第405号 別表第1号</p>
+
+    <h3>日・月・時・年符号</h3>
+    <div id="ref-datetime"></div>
+    <p class="source">出典: 昭和60年郵政省告示第405号 別表第2号〜第5号（値の最下位ビットを先に送るLSBファースト構成）</p>
+
+    <h3>緊急警報信号を使用できる場合（現行制度）</h3>
+    <p>
+      放送法施行規則 第82条（現行）は、①大規模地震対策特別措置法の警戒宣言
+      （第一種）、②災害対策基本法第57条による自治体からの放送要請（第一種）、
+      ③津波警報・大津波警報（第二種）の3区分を定めています。
+      なお警戒宣言の前提となる東海地震予知情報は2017年11月以降発表されない
+      運用となっており（南海トラフ地震臨時情報へ移行。臨時情報自体は
+      緊急警報放送の対象外）、現在の試験放送の案内は津波警報・放送要請を
+      中心とした表記になっています。
+    </p>
+    <p class="source">出典: 放送法施行規則 第82条（e-Gov 現行法令）／気象庁「南海トラフ地震臨時情報」解説</p>
+
+    <h3>一次資料</h3>
+    <ul>
+      <li>無線設備規則 第9条の3「緊急警報信号発生装置」
+        — <a href="https://www.tele.soumu.go.jp/horei/law_honbun/72081000.html" rel="noopener">総務省 電波法令検索</a></li>
+      <li>昭和60年郵政省告示第405号「緊急警報信号の構成」
+        — <a href="https://www.tele.soumu.go.jp/horei/law_honbun/72103000.html" rel="noopener">総務省 電波法令検索</a></li>
+      <li>伊藤泰宏（NHK放送技術研究所）「緊急警報放送」映像情報メディア学会誌 Vol.61, No.6, pp.761-763 (2007)
+        — <a href="https://www.jstage.jst.go.jp/article/itej/61/6/61_6_761/_pdf" rel="noopener">J-Stage</a></li>
+      <li>放送法施行規則 第82条「緊急警報信号の使用」
+        — <a href="https://laws.e-gov.go.jp/law/325M50080000010" rel="noopener">e-Gov法令検索</a></li>
+    </ul>
+    <p>詳細な転記と実装対応表はリポジトリの <a href="docs/SPEC.md">docs/SPEC.md</a> を参照してください。</p>
+  </div>
+</section>
+
+</main>
+
+<footer class="bezel">
+  一次資料に基づく学習・検証用ツール ｜ 仕様転記: <a href="docs/SPEC.md">docs/SPEC.md</a> ｜
+  <a href="https://github.com/Yanai-Taketo/Emergency-Warning-System" rel="noopener">ソースコード（GitHub）</a> ｜ MIT License
+</footer>
+
+<script type="module" src="web/app.js"></script>
+</body>
+</html>
