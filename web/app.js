@@ -359,19 +359,41 @@ for (const ev of ['dragover', 'dragleave', 'drop']) {
   });
 }
 
-/* --- マイク リアルタイム解析 --- */
+/* --- マイク/デスクトップ音声 リアルタイム解析 --- */
 let mic = null; // { stream, node, source, analyzer, statusTimer, analyzeTimer, peak, peakAt }
 
-async function startMic() {
+// 加工なしの生音声を要求する (EWSトーンをそのまま解析するため)
+const RAW_AUDIO = { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+// source: 'mic' | 'display'
+async function startCapture(source) {
   $('ana-error').hidden = true;
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-    });
+    let stream, label;
+    if (source === 'display') {
+      // 画面共有APIでタブ/システム音声を取得する。videoトラックはAPI上必須。
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        throw new Error('このブラウザは画面共有による音声取得に対応していません (Chrome / Edgeをお使いください)');
+      }
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: RAW_AUDIO,
+        systemAudio: 'include',        // Chrome: 画面全体の共有でシステム音声を候補に出す
+        selfBrowserSurface: 'exclude', // このタブ自身は候補から外す
+      });
+      if (stream.getAudioTracks().length === 0) {
+        for (const t of stream.getTracks()) t.stop();
+        throw new Error('音声トラックがありません。共有ダイアログで「音声も共有」を有効にしてください。');
+      }
+      label = 'デスクトップ音声';
+    } else {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: RAW_AUDIO });
+      label = 'マイク入力';
+    }
     const ac = ctx();
     await ac.resume();
     updateHeader();
-    const source = ac.createMediaStreamSource(stream);
+    const srcNode = ac.createMediaStreamSource(stream);
     const analyzer = new StreamingAnalyzer(ac.sampleRate);
     let node;
     try {
@@ -383,29 +405,33 @@ async function startMic() {
       URL.revokeObjectURL(url);
       node = new AudioWorkletNode(ac, 'ews-cap');
       node.port.onmessage = (e) => analyzer.push(e.data);
-      source.connect(node);
+      srcNode.connect(node);
     } catch {
       // AudioWorkletが使えない環境向けのフォールバック
       node = ac.createScriptProcessor(4096, 1, 1);
       node.onaudioprocess = (e) => analyzer.push(e.inputBuffer.getChannelData(0).slice(0));
-      source.connect(node);
+      srcNode.connect(node);
       node.connect(ac.destination); // ScriptProcessorは接続がないと動かない (無音出力)
     }
-    mic = { stream, node, source, analyzer, peak: 0, peakAt: 0 };
+    mic = { stream, node, source: srcNode, analyzer, peak: 0, peakAt: 0 };
     mic.statusTimer = setInterval(updateMicStatus, 100);
     mic.analyzeTimer = setInterval(() => {
       const r = mic.analyzer.analyze();
       const detected = renderResult(r);
       setAnaStatus(detected ? 'detected' : 'running', detected ? '信号検出' : '解析中');
     }, 1000);
+    // 共有停止 (ブラウザUIの「共有を停止」等) で自動的に解析を終了する
+    for (const t of stream.getTracks()) t.addEventListener('ended', stopCapture);
     $('ana-mic').disabled = true;
+    $('ana-display').disabled = true;
     $('ana-mic-stop').disabled = false;
-    $('ana-src-info').textContent = `マイク入力 — ${ac.sampleRate} Hz`;
+    $('ana-src-info').textContent = `${label} — ${ac.sampleRate} Hz`;
     setAnaStatus('running', '解析中');
   } catch (e) {
+    if (e.name === 'NotAllowedError' && source === 'display') return; // 共有ダイアログのキャンセル
     $('ana-error').textContent = e.name === 'NotAllowedError'
       ? 'マイク入力を利用できません。ブラウザの権限設定を確認してください。'
-      : `マイクを開始できませんでした: ${e.message}`;
+      : `解析を開始できませんでした: ${e.message}`;
     $('ana-error').hidden = false;
   }
 }
@@ -426,7 +452,7 @@ function updateMicStatus() {
   $('ana-tone-1024').classList.toggle('is-on', s.tone === 1024);
 }
 
-function stopMic() {
+function stopCapture() {
   if (!mic) return;
   clearInterval(mic.statusTimer);
   clearInterval(mic.analyzeTimer);
@@ -434,6 +460,7 @@ function stopMic() {
   for (const t of mic.stream.getTracks()) t.stop();
   mic = null;
   $('ana-mic').disabled = false;
+  $('ana-display').disabled = false;
   $('ana-mic-stop').disabled = true;
   $('ana-tone-640').classList.remove('is-on');
   $('ana-tone-1024').classList.remove('is-on');
@@ -441,8 +468,9 @@ function stopMic() {
   $('ana-meter-mask').style.width = '100%';
   setAnaStatus('idle', '待機');
 }
-$('ana-mic').addEventListener('click', startMic);
-$('ana-mic-stop').addEventListener('click', stopMic);
+$('ana-mic').addEventListener('click', () => startCapture('mic'));
+$('ana-display').addEventListener('click', () => startCapture('display'));
+$('ana-mic-stop').addEventListener('click', stopCapture);
 
 /* ======================== 資料 ======================== */
 function renderRefTables() {

@@ -175,9 +175,11 @@
     <div class="panel-body" style="display:grid; gap:var(--sp-3)">
       <div class="row">
         <button type="button" class="btn btn-primary" id="ana-mic">マイク解析を開始</button>
+        <button type="button" class="btn" id="ana-display">デスクトップ音声を解析</button>
         <button type="button" class="btn" id="ana-mic-stop" disabled>解析を停止</button>
         <span class="status" data-state="idle" id="ana-status"><span class="led"></span><span id="ana-status-text">待機</span></span>
       </div>
+      <span class="hint">デスクトップ音声: Chrome / Edge対応。共有ダイアログでタブまたは画面全体を選び、「音声も共有」を有効にしてください（radiko等の配信音声やPC上で再生中の録音をそのまま解析できます）。</span>
       <div class="drop-zone" id="ana-drop" tabindex="0" role="button"
            aria-label="音声ファイルをドロップ、またはクリックで選択">
         音声ファイルをここにドロップ（クリックで選択）<br>
